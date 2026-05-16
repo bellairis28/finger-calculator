@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Detector Vocales - Interfaz</title>
+    <style>
+      :root{--bg1:#04251a; --bg2:#063022; --card:#083925; --accent:#9ee6c9; --accent-2:#7adfb0}
+      body { font-family: Arial, sans-serif; background: linear-gradient(180deg,var(--bg1),var(--bg2)); color:#e6eef8; display:flex; align-items:center; justify-content:center; height:100vh; margin:0 }
+      .container { width:100%; max-width:1100px; padding:16px }
+      .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px }
+      .brand { color:#dff7e6; font-weight:800; font-size:20px }
+      .uis { font-size:13px; color:#d1fae5; opacity:0.9 }
+      .btn-inicial { background:var(--accent); color:#04251a; border:0; padding:14px 20px; border-radius:12px; cursor:pointer; font-weight:800; font-size:16px; box-shadow:0 8px 20px rgba(122,223,176,0.12) }
+      .card { background: linear-gradient(180deg,var(--card), rgba(4,41,28,0.9)); padding:18px; border-radius:12px; box-shadow:0 10px 30px rgba(2,6,23,0.6); width:100% }
+      .row { display:flex; gap:20px }
+      video { width:640px; height:480px; background:#000; border-radius:8px; object-fit:cover }
+      .controls { flex:1; display:flex; flex-direction:column; gap:12px }
+      button { padding:12px 18px; border-radius:10px; border:0; cursor:pointer; font-weight:700 }
+      .btn-start { background:var(--accent); color:#04251a; padding:20px 30px; font-size:20px; border-radius:16px; min-width:140px; box-shadow:0 10px 30px rgba(122,223,176,0.08) }
+      .btn-stop { background:#ff7b7b; color:#fff; padding:20px 28px; font-size:20px; border-radius:16px; min-width:120px; box-shadow:0 10px 30px rgba(255,123,123,0.08) }
+      /* Start screen specific styling to make the initial menu larger and more vistoso */
+      .start-card { padding:48px; border-radius:20px; background: linear-gradient(180deg, rgba(158,230,201,0.09), rgba(122,223,176,0.04)); border:1px solid rgba(158,230,201,0.07); box-shadow:0 30px 80px rgba(4,41,28,0.42); display:flex; flex-direction:column; align-items:center; gap:22px; min-height:70vh; justify-content:center }
+      .start-card .brand { font-size:24px; opacity:0.95 }
+      .start-card .start-logo { font-size:120px; font-weight:900; color:#dff7e6; letter-spacing:6px }
+      .start-card .small { font-size:15px }
+      .start-card .btn-inicial { font-size:18px; padding:18px 26px }
+      /* Prominent main start button */
+      .start-main-btn { width:90%; max-width:720px; padding:28px 32px; font-size:30px; border-radius:20px; box-shadow:0 20px 60px rgba(122,223,176,0.16) }
+      /* Secondary controls area */
+      .start-secondary { display:flex; gap:12px; align-items:center; margin-top:6px; font-size:14px }
+      .start-secondary .btn-inicial { padding:10px 14px; font-size:14px; border-radius:10px }
+      .display { background:rgba(255,255,255,0.03); padding:14px; border-radius:10px; min-height:120px; display:flex; flex-direction:column; justify-content:center; align-items:flex-start }
+      .letter { font-size:44px; font-weight:800; color:#bbf7d0; word-break:break-word }
+      .small { font-size:13px; color:#bfe9d0 }
+      canvas { display:none }
+    </style>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <div id="startScreen" style="margin-bottom:14px">
+        <div class="card start-card" style="padding:20px; width:100%">
+          <div style="width:100%; display:flex; flex-direction:column; align-items:center">
+            <div class="start-logo">UIS</div>
+            <div style="font-size:20px; font-weight:900; margin-top:6px">Proyecto Detector de Vocales</div>
+        <div class="small" style="margin-top:6px">Estado Permiso: <span id="permState">desconocido</span></div>
+            <button class="btn-inicial start-main-btn" id="startApp" style="margin-top:18px">Iniciar</button>
+            <div class="start-secondary">
+              <button class="btn-inicial" id="checkDevices">Comprobar dispositivos</button>
+              <div id="deviceList" class="small" style="max-height:120px; overflow:auto; max-width:360px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="appContent" style="display:none">
+        <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <h3 style="margin:0">Interfaz</h3>
+          <div class="small">Conexión WebSocket</div>
+        </div>
+      <div class="row">
+        <video id="video" autoplay playsinline></video>
+        <div class="controls">
+          <div class="display">
+            <div class="small">Vocal detectada</div>
+            <div class="letter" id="letra">-</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <button id="start" class="btn-start">Ejecutar</button>
+            <button id="stop" class="btn-stop">Detener</button>
+            <!-- Control para activar/desactivar el modo espejo (vista y frames enviados) -->
+            <label style="display:flex; align-items:center; gap:10px; margin-left:8px; font-size:15px; font-weight:700">
+              <input type="checkbox" id="flipToggle" checked /> Modo espejo
+            </label>
+          </div>
+          <div id="error" class="small" style="color:#ffb4b4"></div>
+        </div>
+      </div>
+      <canvas id="canvas" width="320" height="240"></canvas>
+    </div>
+
+    <script>
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const btnStart = document.getElementById('start');
+      const btnStop = document.getElementById('stop');
+      const letraEl = document.getElementById('letra');
+
+      let stream = null;
+      let sending = false;
+      let socket = null;
+      let sendInterval = null;
+      // Si está true, corregimos el efecto espejo horizontal tanto en la vista
+      // previa (video element) como en los frames enviados (canvas).
+      let flipHorizontal = document.getElementById('flipToggle')?.checked ?? true;
+
+      function conectarSocket() {
+        socket = io();
+        socket.on('connect', () => { console.log('socket connected'); });
+        socket.on('disconnect', () => { console.log('socket disconnected'); });
+        socket.on('letra', (msg) => { letraEl.textContent = msg.letra; });
+      }
+
+      async function startCamera() {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+        video.srcObject = stream;
+        // Aplicamos el ajuste horizontal según la preferencia del usuario.
+        // Si la cámara devuelve la imagen en modo espejo, marcando la casilla
+        // "Modo espejo" la invertimos para que se vea natural.
+        video.style.transform = flipHorizontal ? 'scaleX(-1)' : 'scaleX(1)';
+        await video.play();
+      }
+
+      function stopCamera() {
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+        video.srcObject = null;
+      }
+
+      function startSending() {
+        if (!socket) conectarSocket();
+        sending = true;
+        // Enviar 5 frames por segundo
+        sendInterval = setInterval(() => {
+          if (!sending) return;
+          // Dibujamos en el canvas aplicando la misma corrección horizontal
+          // que tiene la vista previa. Cuando aplicamos ctx.setTransform con
+          // un scaleX negativo debemos desplazar el origen para que la imagen
+          // quede en el lienzo correctamente.
+          if (flipHorizontal) {
+            ctx.setTransform(-1, 0, 0, 1, canvas.width, 0);
+          } else {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+          }
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const data = canvas.toDataURL('image/jpeg', 0.6);
+          socket.emit('frame', data);
+        }, 200);
+      }
+
+      function stopSending() {
+        sending = false;
+        if (sendInterval) clearInterval(sendInterval);
+      }
+
+      btnStart.addEventListener('click', async () => {
+        try {
+          await startCamera();
+          startSending();
+          // Actualizar estado al iniciar la cámara
+          actualizarEstadoPermiso();
+        } catch (e) {
+          const errEl = document.getElementById('error');
+          console.error('getUserMedia error', e);
+          let msg = 'No se pudo acceder a la cámara: ' + (e.message || e.name || e);
+          // Añadimos información sobre contexto seguro
+          if (!window.isSecureContext) {
+            msg += ' — Nota: getUserMedia requiere un contexto seguro (https) en muchos navegadores, excepto en http://localhost.';
+          }
+          errEl.textContent = msg;
+
+          // Intentar consultar el permiso (si está soportado)
+          if (navigator.permissions && navigator.permissions.query) {
+            try {
+              const p = await navigator.permissions.query({ name: 'camera' });
+              errEl.textContent += ' Permiso cámara: ' + p.state;
+            } catch (perr) {
+              // no hacemos nada
+            }
+          }
+        }
+      });
+
+      btnStop.addEventListener('click', () => {
+        stopSending();
+        stopCamera();
+        letraEl.textContent = '-';
+        // Actualizar estado al detener la cámara
+        actualizarEstadoPermiso();
+      });
+       // Mostrar la pantalla principal al pulsar Iniciar
+       const startBtn = document.getElementById('startApp');
+       const startScreen = document.getElementById('startScreen');
+       const appContent = document.getElementById('appContent');
+       // Función para actualizar el estado de permiso en la UI
+       async function actualizarEstadoPermiso() {
+         const permStateEl = document.getElementById('permState');
+         // Si la cámara está activa (stream asignado), mostramos conectado
+         try {
+           if (stream) { permStateEl.textContent = 'Conectado'; return; }
+         } catch (e) {
+           // stream puede no estar definido aún
+         }
+         if (!navigator.permissions || !navigator.permissions.query) return;
+         try {
+           const p = await navigator.permissions.query({ name: 'camera' });
+           if (p.state === 'granted') permStateEl.textContent = 'Permiso concedido';
+           else if (p.state === 'prompt') permStateEl.textContent = 'Solicitando permiso';
+           else if (p.state === 'denied') permStateEl.textContent = 'Denegado';
+           else permStateEl.textContent = p.state;
+         } catch (e) {
+           permStateEl.textContent = 'no disponible';
+         }
+       }
+       // Actualizamos estado al cargar el start screen
+       actualizarEstadoPermiso();
+      startBtn.addEventListener('click', async () => {
+        // Mostrar interfaz y solicitar permiso de cámara inmediatamente
+        startScreen.style.display = 'none';
+        appContent.style.display = 'block';
+        const errEl = document.getElementById('error');
+        try {
+          await startCamera();
+        } catch (e) {
+          console.error('getUserMedia error on start:', e);
+          let msg = 'No se pudo acceder a la cámara: ' + (e.message || e.name || e);
+          if (!window.isSecureContext) msg += ' — Nota: getUserMedia requiere HTTPS en muchos navegadores (usa http://localhost si estás en la misma máquina).';
+          errEl.textContent = msg;
+        }
+      });
+
+      // Botón para comprobar permisos y dispositivos
+      const checkBtn = document.getElementById('checkDevices');
+      const permStateEl = document.getElementById('permState');
+      const deviceListEl = document.getElementById('deviceList');
+      const flipToggle = document.getElementById('flipToggle');
+      if (flipToggle) {
+        flipToggle.addEventListener('change', () => {
+          flipHorizontal = flipToggle.checked;
+          video.style.transform = flipHorizontal ? 'scaleX(-1)' : 'scaleX(1)';
+        });
+      }
+      checkBtn.addEventListener('click', async () => {
+        deviceListEl.textContent = 'Comprobando...';
+        try {
+          if (navigator.permissions && navigator.permissions.query) {
+              try {
+                const p = await navigator.permissions.query({ name: 'camera' });
+                // Mapear estados a texto en español más apropiado
+                if (p.state === 'granted') permStateEl.textContent = 'Conectado';
+                else if (p.state === 'prompt') permStateEl.textContent = 'Solicitando permiso';
+                else if (p.state === 'denied') permStateEl.textContent = 'Denegado';
+                else permStateEl.textContent = p.state;
+              } catch (e) {
+                permStateEl.textContent = 'no disponible';
+              }
+          }
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cams = devices.filter(d => d.kind === 'videoinput');
+          deviceListEl.innerHTML = cams.length ? cams.map(c => '<div>' + (c.label || 'Cámara sin nombre') + '</div>').join('') : '<div>No se detectan cámaras</div>';
+          // Actualizamos estado tras comprobar dispositivos
+          actualizarEstadoPermiso();
+        } catch (e) {
+          deviceListEl.textContent = 'Error: ' + (e.message || e);
+        }
+      });
+    </script>
+  </body>
+</html>
